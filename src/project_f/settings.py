@@ -42,8 +42,12 @@ INSTALLED_APPS = [
     'django_filters',
     'corsheaders',
     'treebeard',
+    'drf_spectacular',
     'channels',
-    'drf_spectacular'
+
+    
+    
+    'project_f.apps.catalog',
 ]
 
 MIDDLEWARE = [
