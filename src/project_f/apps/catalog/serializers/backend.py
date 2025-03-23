@@ -31,7 +31,7 @@ class CategoryTreeSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Category
-        fields = ('title', 'description', 'is_public', 'slug', 'children', 'id',)
+        fields = ('id','title', 'description', 'is_public', 'slug', 'children', )
 
 
 CategoryTreeSerializer.get_children = extend_schema_field(serializers.ListField(child=CategoryTreeSerializer()))(CategoryTreeSerializer.get_children)

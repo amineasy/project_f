@@ -32,8 +32,3 @@ class CategoryViewSet(viewsets.ModelViewSet):
 
             case _:
                 raise NotAcceptable()
-
-        if self.action == 'list':
-            return CategoryTreeSerializer
-        else:
-            return CreateCategoryNodeSerializer
