@@ -41,3 +41,19 @@ doc_urlpatterns = [
 urlpatterns = [
     path('admin/', admin.site.urls),
 ] + frontend_urls + backend_urls+doc_urlpatterns
+
+
+
+
+admin.site.site_title = 'project_f'
+admin.site.site_header = 'project_f'
+
+
+
+
+
+
+
+
+
+
