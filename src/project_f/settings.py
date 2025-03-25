@@ -45,9 +45,8 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'channels',
 
-    
-    
     'project_f.apps.catalog',
+    'project_f.apps.media'
 ]
 
 MIDDLEWARE = [
@@ -133,6 +132,11 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 
+
+MEDIA_ROOT = "/vol/web/media"
+MEDIA_URL = "media/"
+
+
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
@@ -159,3 +163,7 @@ SPECTACULAR_SETTINGS = {
     'SERVE_INCLUDE_SCHEMA': False,
     # OTHER SETTINGS
 }
+
+
+
+

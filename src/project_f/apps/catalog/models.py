@@ -1,7 +1,9 @@
 from django.db import models
+from django.db.models import ForeignKey
 from treebeard.mp_tree import MP_Node
 
 from project_f.apps.catalog.managers import CategoryQuerySet
+from project_f.libs.db.fields import UppercaseCharField
 
 
 class Category(MP_Node):
@@ -49,14 +51,11 @@ class Product(models.Model):
 
     track_stock = models.BooleanField(default=True)
     required_shipping = models.BooleanField(default=True)
-    options = models.ManyToManyField('Option',blank=True)
+    options = models.ManyToManyField('Option', blank=True)
 
     @property
     def has_attribute(self):
         return self.attributes_related.exists()
-
-
-
 
     def __str__(self):
         return self.title
@@ -113,3 +112,82 @@ class Option(models.Model):
     class Meta:
         verbose_name = 'Option'
         verbose_name_plural = "Options"
+
+
+class ProductItem(models.Model):
+    class ProductTypeChoice(models.TextChoices):
+        standalone = ('standalone', 'Standalone')
+        parent = ('parent', 'Parent')
+        child = ('child', 'Child')
+
+    structure = models.CharField(max_length=16, choices=ProductTypeChoice.choices, default=ProductTypeChoice.standalone)
+    parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
+    title = models.CharField(max_length=128, null=True, blank=True)
+    upc = UppercaseCharField(max_length=24, null=True, blank=True, unique=True)
+    is_public = models.BooleanField(default=True)
+    meta_title = models.CharField(max_length=128, null=True, blank=True)
+    meta_description = models.TextField(null=True, blank=True)
+
+    product_class = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, blank=True)
+    attributes = models.ManyToManyField(ProductAttribute, through='ProductAttributeValue')
+    recommended_product = models.ManyToManyField('catalog.ProductItem', through='ProductRecommendation', blank=True)
+
+    @property
+    def main_image(self):
+        if self.images.exists():
+            return self.images.first()
+        else:
+            return None
+
+
+    class Meta:
+        verbose_name = 'ProductItem'
+        verbose_name_plural = "ProductItems"
+
+
+class ProductAttributeValue(models.Model):
+    product_item = models.ForeignKey(ProductItem, on_delete=models.CASCADE)
+    attribute = models.ForeignKey(ProductAttribute, on_delete=models.CASCADE)
+    value_text = models.TextField(null=True, blank=True)
+    value_integer = models.IntegerField(null=True, blank=True)
+    value_float = models.FloatField(null=True, blank=True)
+    value_date = models.DateField(null=True, blank=True)
+    value_time = models.TimeField(null=True, blank=True)
+    value_option = models.ForeignKey(OptionGroupValue, on_delete=models.PROTECT, null=True, blank=True,
+                                     related_name='attributes_related')
+    value_multi_option = models.ManyToManyField(OptionGroupValue, null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'Attribute Value'
+        verbose_name_plural = "Attribute Values"
+        unique_together = (('product_item', 'attribute'),)
+
+
+class ProductRecommendation(models.Model):
+    primary = models.ForeignKey(ProductItem, on_delete=models.CASCADE, related_name='primary_recommendation')
+    recommendation = models.ForeignKey(ProductItem, on_delete=models.CASCADE)
+    rank = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        unique_together = (('primary', 'recommendation'),)
+        ordering = ('primary', '-rank')
+
+
+class ProductImage(models.Model):
+    product = models.ForeignKey(ProductItem, on_delete=models.CASCADE,related_name='images')
+    image = ForeignKey('media.Image', on_delete=models.PROTECT)
+    display_order = models.PositiveSmallIntegerField(default=0)
+
+    class Meta:
+        ordering = ('display_order',)
+
+    def delete(self, *args, **kwargs):
+        super().delete(*args, **kwargs)
+        self.images.all()
+        for index,image in enumerate(self.product.images.all()):
+            image.display_order = index
+            image.save()
+
+
+
+

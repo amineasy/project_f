@@ -32,6 +32,12 @@ class ProductAttributeFilter(admin.SimpleListFilter):
             return queryset.annotate(attribute_count=Count('attributes_related')).filter(attribute_count__lte=5)
 
 
+class ProductRecommendationInline(admin.TabularInline):
+    model = ProductRecommendation
+    extra = 2
+    fk_name = 'primary'
+
+
 class ProductAdmin(admin.ModelAdmin):
     prepopulated_fields = {'slug': ('title',)}
     list_display = ('title', 'slug', 'required_shipping', 'track_stock', 'attribute_count', 'has_attribute')
@@ -41,8 +47,6 @@ class ProductAdmin(admin.ModelAdmin):
 
     def attribute_count(self, obj):
         return obj.attributes_related.count()
-
-
 
     def enable_track_stock(self, request, queryset):
         queryset.update(track_stock=True)
