@@ -46,7 +46,9 @@ INSTALLED_APPS = [
     'channels',
 
     'project_f.apps.catalog',
-    'project_f.apps.media'
+    'project_f.apps.media',
+    'project_f.apps.analytics',
+    'project_f.apps.inventory'
 ]
 
 MIDDLEWARE = [

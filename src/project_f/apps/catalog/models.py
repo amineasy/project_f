@@ -1,16 +1,18 @@
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.db.models import ForeignKey
 from treebeard.mp_tree import MP_Node
 
 from project_f.apps.catalog.managers import CategoryQuerySet
 from project_f.libs.db.fields import UppercaseCharField
+from project_f.libs.db.models import AudioTableModel
 
 
 class Category(MP_Node):
     title = models.CharField(max_length=255, db_index=True)
-    description = models.TextField()
+    slug = models.SlugField(unique=True, allow_unicode=True)
+    description = models.TextField(null=True, blank=True)
     is_public = models.BooleanField(default=True)
-    slug = models.SlugField(default=True)
 
     objects = CategoryQuerySet.as_manager()
 
@@ -44,14 +46,13 @@ class OptionGroupValue(models.Model):
         verbose_name_plural = "Option Group values"
 
 
-class Product(models.Model):
+class ProductClass(models.Model):
     title = models.CharField(max_length=255, db_index=True)
     slug = models.SlugField(unique=True, allow_unicode=True)
     description = models.TextField()
 
     track_stock = models.BooleanField(default=True)
     required_shipping = models.BooleanField(default=True)
-    options = models.ManyToManyField('Option', blank=True)
 
     @property
     def has_attribute(self):
@@ -61,11 +62,11 @@ class Product(models.Model):
         return self.title
 
     class Meta:
-        verbose_name = 'Product'
-        verbose_name_plural = "Products"
+        verbose_name = 'Product class'
+        verbose_name_plural = "Product classes"
 
 
-class ProductAttribute(models.Model):
+class ProductClassAttribute(models.Model):
     class AttributeTypeChoice(models.TextChoices):
         TEXT = ('text', 'Text')
         INTEGER = ('integer', 'Integer')
@@ -76,18 +77,17 @@ class ProductAttribute(models.Model):
         OPTION = ('option', 'Option')
         MULTI_OPTION = ('multi_option', 'Multi Option')
 
-    product = models.ForeignKey(Product, on_delete=models.CASCADE, null=True, related_name='attributes_related')
+    product = models.ForeignKey(ProductClass, on_delete=models.CASCADE, null=True, related_name='attributes_related')
     title = models.CharField(max_length=255, db_index=True)
     type = models.CharField(max_length=16, choices=AttributeTypeChoice.choices, default=AttributeTypeChoice.TEXT)
-    option_group = models.ForeignKey(OptionGroup, on_delete=models.PROTECT, null=True, blank=True)
     required = models.BooleanField(default=False)
 
     def __str__(self):
         return self.title
 
     class Meta:
-        verbose_name = 'Product Attribute'
-        verbose_name_plural = "Product Attributes"
+        verbose_name = 'Product class Attribute'
+        verbose_name_plural = "Product class Attributes"
 
 
 class Option(models.Model):
@@ -114,7 +114,7 @@ class Option(models.Model):
         verbose_name_plural = "Options"
 
 
-class ProductItem(models.Model):
+class ProductItem(AudioTableModel):
     class ProductTypeChoice(models.TextChoices):
         standalone = ('standalone', 'Standalone')
         parent = ('parent', 'Parent')
@@ -123,14 +123,18 @@ class ProductItem(models.Model):
     structure = models.CharField(max_length=16, choices=ProductTypeChoice.choices, default=ProductTypeChoice.standalone)
     parent = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='children')
     title = models.CharField(max_length=128, null=True, blank=True)
+    slug = models.SlugField(unique=True, allow_unicode=True)
     upc = UppercaseCharField(max_length=24, null=True, blank=True, unique=True)
     is_public = models.BooleanField(default=True)
     meta_title = models.CharField(max_length=128, null=True, blank=True)
     meta_description = models.TextField(null=True, blank=True)
 
-    product_class = models.ForeignKey(Product, on_delete=models.PROTECT, null=True, blank=True)
-    attributes = models.ManyToManyField(ProductAttribute, through='ProductAttributeValue')
+    product_class = models.ForeignKey(ProductClass, on_delete=models.PROTECT, null=True, blank=True)
+    attributes = models.ManyToManyField(ProductClassAttribute, through='ProductAttributeValue')
     recommended_product = models.ManyToManyField('catalog.ProductItem', through='ProductRecommendation', blank=True)
+    category = models.ManyToManyField(Category, related_name='categories')
+    option_groups = models.ManyToManyField(OptionGroup, related_name='option_groups')
+    options = models.ManyToManyField(Option, blank=True)
 
     @property
     def main_image(self):
@@ -139,27 +143,49 @@ class ProductItem(models.Model):
         else:
             return None
 
+    def __str__(self):
+        return self.title
 
     class Meta:
         verbose_name = 'ProductItem'
-        verbose_name_plural = "ProductItems"
+        verbose_name_plural = "Product Items"
 
 
 class ProductAttributeValue(models.Model):
     product_item = models.ForeignKey(ProductItem, on_delete=models.CASCADE)
-    attribute = models.ForeignKey(ProductAttribute, on_delete=models.CASCADE)
+    attribute = models.ForeignKey(ProductClassAttribute, on_delete=models.CASCADE)
     value_text = models.TextField(null=True, blank=True)
     value_integer = models.IntegerField(null=True, blank=True)
     value_float = models.FloatField(null=True, blank=True)
     value_date = models.DateField(null=True, blank=True)
     value_time = models.TimeField(null=True, blank=True)
+    value_boolean = models.BooleanField(default=False)
+
     value_option = models.ForeignKey(OptionGroupValue, on_delete=models.PROTECT, null=True, blank=True,
                                      related_name='attributes_related')
-    value_multi_option = models.ManyToManyField(OptionGroupValue, null=True, blank=True)
+
+    def __str__(self):
+        match True:
+            case _ if self.value_text:
+                return f"{str(self.value_text)} {str(self.attribute)}"
+            case _ if self.value_integer is not None:
+                return f"{str(self.value_integer)} {str(self.attribute)}"
+            case _ if self.value_float is not None:
+                return f"{str(self.value_float)} {str(self.attribute)}"
+            case _ if self.value_date:
+                return f"{str(self.value_date)} {str(self.attribute)}"
+            case _ if self.value_time:
+                return f"{str(self.value_time)} {str(self.attribute)}"
+            case _ if self.value_option:
+                return f"{str(self.value_option)} {str(self.attribute)}"
+            case _ if self.value_multi_option.exists():
+                return ", ".join(str(option) for option in self.value_multi_option.all())
+            case _:
+                return "No Value"
 
     class Meta:
-        verbose_name = 'Attribute Value'
-        verbose_name_plural = "Attribute Values"
+        verbose_name = 'Product Attribute Value'
+        verbose_name_plural = "Product Attribute Values"
         unique_together = (('product_item', 'attribute'),)
 
 
@@ -174,7 +200,7 @@ class ProductRecommendation(models.Model):
 
 
 class ProductImage(models.Model):
-    product = models.ForeignKey(ProductItem, on_delete=models.CASCADE,related_name='images')
+    product = models.ForeignKey(ProductItem, on_delete=models.CASCADE, related_name='images')
     image = ForeignKey('media.Image', on_delete=models.PROTECT)
     display_order = models.PositiveSmallIntegerField(default=0)
 
@@ -184,10 +210,45 @@ class ProductImage(models.Model):
     def delete(self, *args, **kwargs):
         super().delete(*args, **kwargs)
         self.images.all()
-        for index,image in enumerate(self.product.images.all()):
+        for index, image in enumerate(self.product.images.all()):
             image.display_order = index
             image.save()
 
 
+class Color(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+    hex_code = models.CharField(max_length=7, unique=True)  # مثلا "#FF5733"
+
+    def __str__(self):
+        return self.name
 
 
+class Size(models.Model):
+    name = models.CharField(max_length=50, unique=True)
+
+    def __str__(self):
+        return self.name
+
+
+class ProductItemVariant(models.Model):
+    product_item = models.ForeignKey(ProductItem, on_delete=models.CASCADE, related_name="variants")
+    color = models.ForeignKey(Color, on_delete=models.PROTECT, null=True, blank=True)
+    size = models.ForeignKey(Size, on_delete=models.PROTECT, null=True, blank=True)
+    price = models.IntegerField(default=0)
+    stock = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["product_item", "color", "size"],
+                name="unique_variant"
+            ),
+        ]
+
+    def __str__(self):
+        details = []
+        if self.color:
+            details.append(f"Color: {self.color}")
+        if self.size:
+            details.append(f"Size: {self.size}")
+        return f"{self.product_item.title} - " + " | ".join(details)

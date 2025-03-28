@@ -21,14 +21,15 @@ class Image(models.Model):
     focal_point_height = models.PositiveIntegerField(null=True, blank=True)
 
     def save(self, *args, **kwargs):
-        self.file_size = self.image.size
+        if not self.image.file.closed:
+            self.file_size = self.image.size
 
-        hasher = hashlib.sha1()
-        for chunk in self.image.file.chunks():
-            hasher.update(chunk)
-        self.file_hash = hasher.hexdigest()
+            hasher = hashlib.sha1()
+            for chunk in self.image.file.chunks():
+                hasher.update(chunk)
+            self.file_hash = hasher.hexdigest()
 
-        super().save(*args, **kwargs)
+            super().save(*args, **kwargs)
 
 
 @receiver(pre_save, sender=Image)
