@@ -9,3 +9,6 @@ from django.db import models
 class ActionHistory(LogEntry):
     class Meta:
         proxy = True
+
+
+

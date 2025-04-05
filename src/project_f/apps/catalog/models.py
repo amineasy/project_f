@@ -47,6 +47,7 @@ class OptionGroupValue(models.Model):
 
 
 class ProductClass(models.Model):
+    category = models.ForeignKey(Category, on_delete=models.CASCADE,related_name='categories_product_class',blank=True, null=True)
     title = models.CharField(max_length=255, db_index=True)
     slug = models.SlugField(unique=True, allow_unicode=True)
     description = models.TextField()
@@ -115,6 +116,8 @@ class Option(models.Model):
 
 
 class ProductItem(AudioTableModel):
+    product_class = models.ForeignKey(ProductClass, on_delete=models.PROTECT, null=True, blank=True)
+
     class ProductTypeChoice(models.TextChoices):
         standalone = ('standalone', 'Standalone')
         parent = ('parent', 'Parent')
@@ -129,12 +132,11 @@ class ProductItem(AudioTableModel):
     meta_title = models.CharField(max_length=128, null=True, blank=True)
     meta_description = models.TextField(null=True, blank=True)
 
-    product_class = models.ForeignKey(ProductClass, on_delete=models.PROTECT, null=True, blank=True)
     attributes = models.ManyToManyField(ProductClassAttribute, through='ProductAttributeValue')
     recommended_product = models.ManyToManyField('catalog.ProductItem', through='ProductRecommendation', blank=True)
     category = models.ManyToManyField(Category, related_name='categories')
-    option_groups = models.ManyToManyField(OptionGroup, related_name='option_groups')
-    options = models.ManyToManyField(Option, blank=True)
+    option_groups = models.ManyToManyField(OptionGroup, related_name='option_groups',blank=True, null=True)
+    options = models.ManyToManyField(OptionGroupValue, blank=True,null=True, related_name='options')
 
     @property
     def main_image(self):
@@ -178,8 +180,6 @@ class ProductAttributeValue(models.Model):
                 return f"{str(self.value_time)} {str(self.attribute)}"
             case _ if self.value_option:
                 return f"{str(self.value_option)} {str(self.attribute)}"
-            case _ if self.value_multi_option.exists():
-                return ", ".join(str(option) for option in self.value_multi_option.all())
             case _:
                 return "No Value"
 
